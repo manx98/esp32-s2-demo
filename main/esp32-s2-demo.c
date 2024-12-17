@@ -3,11 +3,12 @@
 #include <stdio.h>
 #include <u8g2.h>
 #include <u8g2_esp32_hal.h>
-#include <esp_private/pm_impl.h>
 
 #include "config.h"
 #include "wifi.h"
 #include "lm75a.h"
+#include "sht30.h"
+
 #include <sys/unistd.h>
 
 static void init_u8g2_esp32()
@@ -37,26 +38,50 @@ static void init_wifi()
 
 static char* TAG = "main";
 
+void i2c_scanner() {
+    ESP_LOGI(TAG, "Scanning I2C bus...");
+    // Iterate over all possible I2C addresses
+    for (int addr = 1; addr < 127; addr++) {
+        // Create I2C command link
+        i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+        i2c_master_start(cmd);
+        // Send I2C address with write bit
+        i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, true);
+        i2c_master_stop(cmd);
+
+        // Execute I2C command and check for response
+        esp_err_t ret = i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, pdMS_TO_TICKS(1000));
+        i2c_cmd_link_delete(cmd);
+
+        // If device responds, print the address
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "Found device at address 0x%02x", addr);
+        }
+    }
+    ESP_LOGI(TAG, "I2C scan complete.");
+}
 void app_main(void)
 {
     init_u8g2_esp32();
     init_wifi();
-    float temp;
+    i2c_scanner();
+    ESP_ERROR_CHECK(sht30_init());
+    float temp, sht30_temp, sht30_hum;
     char buf[100];
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        ESP_LOGI(TAG, "lm75a_read_temperature");
         lm75a_read_temperature(&temp);
-        ESP_LOGI(TAG, "u8g2_ClearBuffer");
         u8g2_ClearBuffer(&u8g2);
-        ESP_LOGI(TAG, "u8g2_SetFont");
-        u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
-        ESP_LOGI(TAG, "temp: %f", temp);
+        u8g2_SetFont(&u8g2, u8g2_font_5x7_tf);
         sprintf(buf, "TMP: %.2f", temp);
-        u8g2_DrawStr(&u8g2, 0, 16, buf);
-        ESP_LOGI(TAG, "u8g2_SendBuffer start");
+        u8g2_DrawStr(&u8g2, 0, 10, buf);
+        if(sht30_read(&sht30_temp, &sht30_hum) != ESP_OK) {
+            sht30_temp = 0;
+            sht30_hum = 0;
+        }
+        sprintf(buf, "T:%.2f H:%.2f", sht30_temp, sht30_hum);
+        u8g2_DrawStr(&u8g2, 0, 20, buf);
         u8g2_SendBuffer(&u8g2);
-        ESP_LOGI(TAG, "u8g2_SendBuffer done");
     }
 }
