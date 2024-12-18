@@ -83,5 +83,8 @@ void app_main(void)
         sprintf(buf, "T:%.2f H:%.2f", sht30_temp, sht30_hum);
         u8g2_DrawStr(&u8g2, 0, 20, buf);
         u8g2_SendBuffer(&u8g2);
+        // 打印 PSRAM 的大小
+        ESP_LOGI(TAG, "PSRAM Size: %zu/%zu bytes", heap_caps_get_total_size(MALLOC_CAP_SPIRAM), heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        ESP_LOGI(TAG, "Free heap size: %lu", esp_get_free_heap_size());
     }
 }
